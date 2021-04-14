@@ -3,13 +3,21 @@ import Denomander from "https://deno.land/x/denomander/mod.ts";
 import * as path from "https://deno.land/std/path/mod.ts";
 
 const identity = <T>(a: T) => a;
-const SELF_UPDATE = "https://github.com/Zequez/self-programmer";
+// const SELF_UPDATE = "https://github.com/Zequez/self-programmer";
 const SELF_SPAWN = path.dirname(path.fromFileUrl(import.meta.url));
-const ROOT_SPAWN = path.join(SELF_SPAWN, "../");
+// const ROOT_SPAWN = path.join(SELF_SPAWN, "../");
 const nextBranchId = (() => {
   let id = 0;
   return () => ++id;
 })();
+const rootSpawn = () => program.root || SELF_SPAWN;
+
+// ███╗   ███╗ █████╗ ██╗███╗   ██╗
+// ████╗ ████║██╔══██╗██║████╗  ██║
+// ██╔████╔██║███████║██║██╔██╗ ██║
+// ██║╚██╔╝██║██╔══██║██║██║╚██╗██║
+// ██║ ╚═╝ ██║██║  ██║██║██║ ╚████║
+// ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝
 
 const program = new Denomander({
   app_name: "Self-programmer",
@@ -29,19 +37,14 @@ program
   .action(runServer)
   .parse(Deno.args);
 
-function rootSpawn() {
-  return program.root || SELF_SPAWN;
-}
-
 function runSnapshot() {
   console.log("Running snapshot with", rootSpawn());
   const state = init(rootSpawn());
   // state.tree
   // console.log(JSON.stringify(state.tree, null, 2));
+  console.log(JSON.stringify(treeStructureSnapshot(state.tree), null, 2));
   console.log("Initialzed, done");
 }
-
-function treeShape() {}
 
 function runCli() {
   console.log("Running CLI with", rootSpawn());
@@ -125,11 +128,17 @@ type Branch = {
   map: BranchMap;
 };
 
-type BranchBody = Branch[] | Blob | Link;
+// type BranchBody = Branch[] | Blob | Link;
 type BranchMap = Map<BranchID, Branch>;
 
-type Blob = Uint8Array;
-type Link = BranchID;
+type BranchBody =
+  | { t: "Unmanifest" }
+  | { t: "Blob" } // Uint8Array
+  | { t: "Link"; v: BranchID }
+  | { t: "Branches"; v: Branch[] };
+
+// type Blob = Uint8Array;
+// type Link = BranchID;
 type BranchID = number;
 
 type Projection =
@@ -154,24 +163,6 @@ function init(rootPath: string): State {
   };
 }
 
-// function manifestTree(rootPath: string): Branch {
-//   return buildTree(rootPath, "");
-//   // return {
-//   //   root: rootPath,
-//   //   trunk: {
-//   //     id: nextBranchId(),
-//   //     prev: null,
-//   //     path: rootPath,
-//   //     name: "",
-//   //     projections: [],
-//   //     people: [],
-//   //     body: "Hello there",
-//   //     map: new Map(),
-//   //   },
-//   //   map: new Map(),
-//   // };
-// }
-
 // ██╗  ██╗███████╗██╗     ██████╗ ███████╗██████╗ ███████╗
 // ██║  ██║██╔════╝██║     ██╔══██╗██╔════╝██╔══██╗██╔════╝
 // ███████║█████╗  ██║     ██████╔╝█████╗  ██████╔╝███████╗
@@ -187,7 +178,7 @@ type BranchForwardParams = {
 
 function manifestBranch(params: BranchForwardParams): Branch {
   const map: BranchMap = new Map();
-  const body: BranchBody = [];
+  const body: BranchBody = { t: "Branches", v: [] };
 
   let dirEntries: Iterable<Deno.DirEntry> = [];
   try {
@@ -214,11 +205,11 @@ function manifestBranch(params: BranchForwardParams): Branch {
     };
 
     if (dirEntry.isFile) {
-      body.push(manifestBlob(forwardParams));
+      body.v.push(manifestBlob(forwardParams));
     } else if (dirEntry.isDirectory) {
-      body.push(manifestBranch(forwardParams));
+      body.v.push(manifestBranch(forwardParams));
     } else if (dirEntry.isSymlink) {
-      body.push(manifestLink(forwardParams));
+      body.v.push(manifestLink(forwardParams));
     }
   }
 
@@ -235,7 +226,7 @@ function emptyBranch(params: BranchForwardParams): Branch {
     name: params.name,
     projections: [],
     people: [],
-    body: [],
+    body: { t: "Unmanifest" },
     map: new Map(),
   };
 }
@@ -243,7 +234,8 @@ function emptyBranch(params: BranchForwardParams): Branch {
 function manifestBlob(params: BranchForwardParams): Branch {
   const branch = {
     ...emptyBranch(params),
-    body: Deno.readFileSync(params.physicalPath),
+    body: { t: "Blob" } as BranchBody,
+    // Deno.readFileSync(params.physicalPath),
   };
   return branch;
 }
@@ -302,3 +294,21 @@ function walkTo(
     return null;
   }, branch);
 }
+
+type StringTree = { [key: string]: StringTree | string };
+
+function treeStructureSnapshot(branch: Branch): StringTree | string {
+  if (branch.body.t === "Branches") {
+    const stringTree: StringTree = {};
+    for (const subBranch of branch.body.v) {
+      stringTree[subBranch.name] = treeStructureSnapshot(subBranch);
+    }
+    return stringTree;
+  } else {
+    return `!${branch.body.t}`;
+  }
+}
+
+// ----------------------------
+
+// Deno.stat
