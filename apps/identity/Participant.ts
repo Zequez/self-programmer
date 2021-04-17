@@ -4,29 +4,40 @@ export type Participant = {
   avatarUrl?: string;
   mission?: string;
   services: Service[];
-  needs: Need[];
+
   energy: Energy[];
   assets: Asset[];
   apps: App[];
   protocols: ParticipantProtocol[];
+  spaces: Space[];
+
   gratitude: Note[];
   asking: Note[];
-  whereabouts: Home[];
+  seeking: Note[];
+  updates: Note[];
+  giving: Note[];
+  receiving: Note[];
+  goals: Note[];
 };
 
 type App = {
   id: string;
-  admin: Participant;
+  roles: { [key: string]: Participant };
+  source: string;
 };
 
-type Home = {
+type Space = {
   name: string;
+  position: LatLng[];
+};
+
+type LatLng = {
   lat: number;
   lng: number;
 };
 
 type Note = {
-  to: string;
+  shareWith: string[];
   message: string;
 };
 
@@ -65,9 +76,4 @@ type Asset = {
 type Service = {
   label: string;
   capacity: string;
-};
-
-type Need = {
-  label: string;
-  link: string;
 };
