@@ -1,21 +1,24 @@
-import { serve } from "https://deno.land/std/http/server.ts";
+import { serve, ServerRequest } from "https://deno.land/std/http/server.ts";
 // import { lookup } from "https://deno.land/x/media_types/mod.ts";
 
 type ServerCallbacks = {
-  onRequestUi?: () => Promise<string>;
-  onRequestSignals?: () => string;
-  onRequestBranches?: () => string;
-  onRequestSignal?: (sign: string) => string;
-  onRequestBranch?: (branch: string) => string;
-  onRequestWriting?: (branch: string, data: string) => string;
-  onSubscribeToSignalChange?: (
-    sign: string,
-    cb: (data: unknown) => void
-  ) => string;
-  onSubscribeToBranchChange?: (
-    branch: string,
-    cb: (data: unknown) => void
-  ) => string;
+  onRequestApp: (app: string) => Promise<string>;
+  onRequestInfo: (query: string[]) => Promise<string>;
+  onRequestRelease: (info: unknown) => Promise<string>;
+  // onRequestFork: (app: string, newAppName: string) => Promise<string>;
+  // onRequestSignals?: () => string;
+  // onRequestBranches?: () => string;
+  // onRequestSignal?: (sign: string) => string;
+  // onRequestBranch?: (branch: string) => string;
+  // onRequestWriting?: (branch: string, data: string) => string;
+  // onSubscribeToSignalChange?: (
+  //   sign: string,
+  //   cb: (data: unknown) => void
+  // ) => string;
+  // onSubscribeToBranchChange?: (
+  //   branch: string,
+  //   cb: (data: unknown) => void
+  // ) => string;
 };
 
 export default async function server(
@@ -35,7 +38,14 @@ export default async function server(
 
     const headers = new Headers();
     headers.set("Content-Type", "text/html");
-    req.respond({ body: (cb.onRequestUi && (await cb.onRequestUi())) || "" });
+    if (req.url === '/query') {
+      req.respond({body: await cb.onRequestInfo(['id', 'name', 'avatarUrl'])})
+    } else if (req.url === '/release') {
+      req.respond({body: await cb.onRequestRelease(req)})
+    } else {
+      req.respond({ body: await cb.onRequestApp(req.url)});
+    }
+
 
     // if (req.url === "/api") {
     //   req.respond({ body: "{success: true}" });

@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.ns", "dom"],
+    "jsx": "react"
+  },
+  "types": ["./std/build/types/react.d.ts", "./std/build/types/react-dom.d.ts"]
+}

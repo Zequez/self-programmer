@@ -19,59 +19,59 @@ export const nextBranchId = (() => {
 
 
 
-type Driver = {
-  identify: (fruit: Fruit) => string[];
-  activate: (fruit: Fruit) => void;
-}
+// type Driver = {
+//   identify: (fruit: Fruit) => string[];
+//   activate: (fruit: Fruit) => void;
+// }
 
 // type FileTypeLabelerDriver
 
-const yamlLoader = new YamlLoader();
-const YamlDriver: Driver = {
-  identify: (fruit: Fruit) =>
-    (fruit.name.endsWith('.yml') || fruit.name.endsWith('.yaml')) ? ['data'] : [];
-  activate: (fruit: Fruit) => {
-    if (fruit.manifested) {
+// const yamlLoader = new YamlLoader();
+// const YamlDriver: Driver = {
+//   identify: (fruit: Fruit) =>
+//     (fruit.name.endsWith('.yml') || fruit.name.endsWith('.yaml')) ? ['data'] : [];
+//   activate: (fruit: Fruit) => {
+//     if (fruit.manifested) {
 
-      parseYaml(fruit.manifested);
-    }
-  }
-}
+//       parseYaml(fruit.manifested);
+//     }
+//   }
+// }
 
-const LoadFromDiskDriver: Driver = {
-  identify: (fruit: Fruit) => fruit.manifested === null ? ['loaded'] : [],
-  activate: (fruit: Fruit) => {}
-}
+// const LoadFromDiskDriver: Driver = {
+//   identify: (fruit: Fruit) => fruit.manifested === null ? ['loaded'] : [],
+//   activate: (fruit: Fruit) => {}
+// }
 
-const IdentityDriver: Driver = {
-  identify: (fruit: Fruit) =>
-    fruit.name.startsWith('.identity') ? ['identity'] : [],
-  activate: (fruit: Fruit) => {}
-}
+// const IdentityDriver: Driver = {
+//   identify: (fruit: Fruit) =>
+//     fruit.name.startsWith('.identity') ? ['identity'] : [],
+//   activate: (fruit: Fruit) => {}
+// }
 
-(fruit: Fruit) => {
-  if (fruit.name === '.identity') {
-    return 'identity';
-  }
-}
+// (fruit: Fruit) => {
+//   if (fruit.name === '.identity') {
+//     return 'identity';
+//   }
+// }
 
-const AppDetectionDriver = (fruit: Fruit) => {
-  fruit.name === '.git'
-}
+// const AppDetectionDriver = (fruit: Fruit) => {
+//   fruit.name === '.git'
+// }
 
-type LoadersDriver = {
-  // On find files with TSX extension
-  // On find files with Elm extension
-}
+// type LoadersDriver = {
+//   // On find files with TSX extension
+//   // On find files with Elm extension
+// }
 
-type SelfAware = {
-  origin: Branch | Fruit;
-  // signals: Map<Sign, any>;
-  projection: null | Branch | Fruit;
-  // allowRead: PublicKey[];
-  // allowWrite: PublicKey[];
-  drivers: Driver[];
-}
+// type SelfAware = {
+//   origin: Branch | Fruit;
+//   // signals: Map<Sign, any>;
+//   projection: null | Branch | Fruit;
+//   // allowRead: PublicKey[];
+//   // allowWrite: PublicKey[];
+//   drivers: Driver[];
+// }
 
 export type Branch = {
   // id: BranchID;
@@ -91,12 +91,7 @@ export type Fruit = {
   manifested: null | Uint8Array;
   alternatives: VirtualFruit[];
   past: Branch;
-  drivers: Driver[];
   size: number;
-  identify: () => void;
-  activate: () => void;
-  deactivate: () => void;
-
 }
 
 export type VirtualFruit = {
@@ -131,24 +126,25 @@ export type Portal = {
 //   | { to: "physical"; path: string };
 
 export type BranchInitParams = {
-  physicalPath: string;
   name: string;
+  location: string;
+  past: Branch | null;
   // prev: Branch | null;
 };
 
-type Label = string;
+// type Label = string;
 
-export function explore(branch: Branch, onFindNew: () => ): Branch {
+// export function explore(branch: Branch, onFindNew: () => ): Branch {
 
-}
+// }
 
-type
+export function explore(root: string): Branch {
+  function deepManifestBranch (newBranch: BranchInitParams) {
+    return manifestBranch(newBranch, deepManifestBranch);
+  }
 
-export function rootOn(root: string): Branch {
-  if (ensureDirSync(root)) {
-    return manifestBranch({physicalPath: root, name: ''}, (subBranch) => {
-      manifestBranch()
-    })
+  if (true) { // Ensure directory exist
+    return deepManifestBranch({location: root, name: '', past: null});
   } else {
     throw new Error("Spawning root must be a directory")
   }
@@ -159,61 +155,65 @@ export function manifestBranch(
   params: BranchInitParams,
   subBranchCallback?: (subBranch: Branch) => Branch
 ): Branch {
-  const map: BranchMap = new Map();
-  const body: BranchBody = { t: "Branches", v: [] };
+  // const map: BranchMap = new Map();
+  // const body: BranchBody = { t: "Branches", v: [] };
 
-  const dirEntries = Deno.readDirSync(params.physicalPath);
+  const dirEntries = Deno.readDirSync(params.location);
 
-  let branch: Branch = {
-    ...emptyBranch(params),
-    map,
-    body,
-  };
+  let branch: Branch = emptyBranch(params);
 
   for (const dirEntry of dirEntries) {
-    const forwardParams = {
-      physicalPath: path.join(params.physicalPath, dirEntry.name),
+    const location = path.join(params.location, dirEntry.name);
+    const name = dirEntry.name;
+    const past = branch;
+    const subParams = {
+      physicalPath: path.join(params.location, dirEntry.name),
       name: dirEntry.name,
       prev: branch,
     };
 
+    if (!branch.pathways) branch.pathways = [];
+
     if (dirEntry.isFile) {
-      body.v.push(manifestBlob(forwardParams));
+      branch.pathways.push(manifestFruit({name, location, past}));
     } else if (dirEntry.isDirectory) {
-      body.v.push(manifestBranch(forwardParams));
+      branch.pathways.push(manifestBranch({name, location, past}));
     } else if (dirEntry.isSymlink) {
-      body.v.push(manifestLink(forwardParams));
+      branch.pathways.push(manifestPortal({name, location, past, to: ''}));
     }
   }
-
-  map.set(branch.id, branch);
 
   return branch;
 }
 
 function emptyBranch(params: BranchInitParams): Branch {
   return {
-    id: nextBranchId(),
+    // id: nextBranchId(),
     // prev: params.prev,
-    path: params.physicalPath,
+    // path: params.physicalPath,
     name: params.name,
-    projections: [],
-    people: [],
-    body: { t: "Unmanifest" },
-    map: new Map(),
-    signals: new Map(),
+    location: params.location,
+    past: params.past,
+    pathways: null,
   };
 }
 
-function manifestBlob(params: BranchInitParams): Branch {
-  const branch = {
-    ...emptyBranch(params),
-    body: { t: "Blob" } as BranchBody,
-    // Deno.readFileSync(params.physicalPath),
-  };
-  return branch;
+function manifestFruit(params: {name: string; location: string; past: Branch}): Fruit {
+  return {
+    name: params.name,
+    location: params.location,
+    manifested: null,
+    alternatives: [],
+    past: params.past,
+    size: 0
+  }
 }
 
-function manifestLink(params: BranchInitParams): Branch {
-  return emptyBranch(params); // TODO
+function manifestPortal(params: {name: string, location: string, past: Branch, to: string}): Portal {
+    return {
+    name: params.name,
+    location: params.location,
+    to: params.to,
+    past: params.past
+  }
 }
