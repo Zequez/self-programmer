@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "denomander": "https://deno.land/x/denomander/mod.ts",
+    "media_types": "https://deno.land/x/media_types/mod.ts"
+  }
+}

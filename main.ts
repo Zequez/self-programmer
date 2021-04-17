@@ -1,7 +1,4 @@
 import * as path from "https://deno.land/std/path/mod.ts";
-import Denomander from "https://deno.land/x/denomander/mod.ts";
-
-import { lookup } from "https://deno.land/x/media_types/mod.ts";
 
 import { PublicKey, PrivateKey, Token } from "./model/Identity.ts";
 import {
