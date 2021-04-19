@@ -1,5 +1,7 @@
 # The Self-Programmer
 
+A sort of framework for community-driven decentralized apps.
+
 The self-programmer is an app of apps.
 
 It's agent-centric, and decentralized.
@@ -15,6 +17,8 @@ It runs standalone, and as a federated web server.
 Any participant can modify and control the self-programmer.
 
 It's made with Deno and released on the public domain.
+
+Sort of like Netlify but decentralized.
 
 Every app can run in the self-programmer.
 

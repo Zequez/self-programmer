@@ -1,17 +1,24 @@
 import * as path from "https://deno.land/std/path/mod.ts";
+import * as fs from "https://deno.land/std/fs/mod.ts";
+import * as Colors from "https://deno.land/std/fmt/colors.ts";
+import { parse as yamlParse } from "https://deno.land/std/encoding/yaml.ts";
+import { Participant } from "./apps/identity/Participant.ts";
+import { pick } from "./libraries/utils.ts";
 
 // import { PublicKey, PrivateKey, Token } from "./model/Identity.ts";
 import {
+  awakenBranch,
   Branch,
+  explore,
   Fruit,
-  Portal,
+  isBranch,
   manifestBranch,
-  explore
+  Portal,
 } from "./model/Branch.ts";
 // import { Sign } from "./model/Signal.ts";
-import commander, { Flags } from "./command.ts";
+import commander, { Flags } from "./libraries/command.ts";
 // import { identity } from "./utils.ts";
-import server from "./server.ts";
+import server from "./libraries/server.ts";
 
 // const ROOT_SPAWN = path.join(SELF_SPAWN, "../");
 // const SELF_UPDATE = "https://github.com/Zequez/self-programmer";
@@ -21,6 +28,38 @@ import server from "./server.ts";
 // const rootSpawn = (): string => program.root || SELF_SPAWN;
 // const SCANNERS: Scanner[] = [scanHtml];
 
+// ████████╗██╗   ██╗██████╗ ███████╗███████╗
+// ╚══██╔══╝╚██╗ ██╔╝██╔══██╗██╔════╝██╔════╝
+//    ██║    ╚████╔╝ ██████╔╝█████╗  ███████╗
+//    ██║     ╚██╔╝  ██╔═══╝ ██╔══╝  ╚════██║
+//    ██║      ██║   ██║     ███████╗███████║
+//    ╚═╝      ╚═╝   ╚═╝     ╚══════╝╚══════╝
+
+type State = {
+  // Center
+  origin: string;
+  location: string;
+  present: Branch;
+
+  // Information
+  participants: Map<string, Participant>;
+  apps: Map<string, Branch>;
+
+  // Server
+  host: string;
+  port: number;
+  //   // Known & Loaded Information
+  //   memory: Map<string, Branch | Fruit | Portal>;
+  //   labels: Map<string, Fruit[]>;
+  //   labelsActions: Map<string, LabelAction>;
+
+  //   // Players Identity
+  //   avatars: Map<AvatarName, Fruit>;
+  //   sessions: Map<Token, AvatarName>;
+  //   avatarKeys: Map<AvatarName, PublicKey>;
+  //   keysRenewAt: Map<PublicKey, number>;
+};
+
 // ██╗███╗   ██╗██╗████████╗
 // ██║████╗  ██║██║╚══██╔══╝
 // ██║██╔██╗ ██║██║   ██║
@@ -28,32 +67,23 @@ import server from "./server.ts";
 // ██║██║ ╚████║██║   ██║
 // ╚═╝╚═╝  ╚═══╝╚═╝   ╚═╝
 
-commander((params) => {
-  const state = init(params);
+commander(init);
 
-  if (params.mode === "snapshot") {
-    // runSnapshot(state);
-  } else if (params.mode === "cli") {
-    // runCli(state);
-  } else if (params.mode === "web") {
-    runWeb(state);
-  }
-});
+function init(params: Flags): void {
+  const tree = explore(params.root);
 
-function init(flags: Flags): State {
-  const tree = explore(flags.root);
-  // const signals = collectSignals(tree);
-  // const branchesMap = collectBranches(tree);
-  return {
+  const state = {
     // flags,
     origin: path.dirname(path.fromFileUrl(import.meta.url)),
-    location: flags.root,
+    location: params.root,
     present: tree,
 
-    // Server
-    host: flags.address,
-    port: flags.port,
+    apps: new Map(),
+    participants: new Map(),
 
+    // Server
+    host: params.address,
+    port: params.port,
     // // Known & Loaded Information
     // memory: Map<string, Branch | Fruit | Portal>;
     // labels: Map<string, Fruit[]>;
@@ -65,37 +95,104 @@ function init(flags: Flags): State {
     // avatarKeys: Map<AvatarName, PublicKey>;
     // keysRenewAt: Map<PublicKey, number>;
   };
-}
 
-// function runSnapshot(state: State) {
-//   console.log("Running snapshot with", program.root);
-//   const state = init(program.root);
-//   // state.tree
-//   // console.log(JSON.stringify(state.tree, null, 2));
-//   // console.log(JSON.stringify(treeStructureSnapshot(state.tree), null, 2));
-//   console.log("Initialized, done");
-//   console.log(state.signals);
-//   // console.log(JSON.stringify(state.signals, null, 2));
-// }
+  const appsBranch = state.present.pathways.apps as Branch;
+  Object.keys(appsBranch.pathways).forEach((appName) => {
+    const appBranch = appsBranch.pathways[appName];
+    if (isBranch(appBranch) && isBranch(appBranch.pathways.participants)) {
+      console.log(
+        Colors.green("Loading with agent driver"),
+        appBranch.location,
+      );
+      const participantsBranch = appBranch.pathways.participants;
+      awakenBranch(participantsBranch);
+      for (const key in participantsBranch.data) {
+        const existing = state.participants.get(key) || {};
+        const current = participantsBranch.data[key] as Participant;
+        state.participants.set(key, { ...existing, ...current });
+      }
+    } else {
+      console.warn(
+        Colors.yellow("Couldn't find app driver"),
+        appBranch.location,
+      );
+    }
+  });
 
-// function runCli(state: State) {
-//   console.log("Running CLI with", program.root);
-// }
+  console.log(
+    "Participants: ",
+    JSON.stringify(Object.fromEntries(state.participants), null, 2),
+  );
 
-function runWeb(state: State) {
   console.log("Running server");
+
   server(state.location, state.host, state.port, {
     onRequestApp: (app: string) => {
-
-      return Promise.resolve("<html><body>Hello there</body></html>")
+      return Promise.resolve("<html><body>Hello there</body></html>");
     },
     onRequestInfo: (query: string[]) => {
-      return Promise.resolve(JSON.stringify([{id: "zequez", name: "Ezequiel", avatarUrl: "https://robohash.org/d13a61ea10fb3d5e926676e0c64cafbb?set=set4&bgset=&size=400x400"}]))
+      return Promise.resolve(
+        JSON.stringify([{
+          id: "zequez",
+          name: "Ezequiel",
+          avatarUrl:
+            "https://robohash.org/d13a61ea10fb3d5e926676e0c64cafbb?set=set4&bgset=&size=400x400",
+        }]),
+      );
     },
     onRequestRelease: (info: unknown) => {
-      return Promise.resolve('true');
+      return Promise.resolve("true");
     },
   });
+}
+
+function readParticipantsFromStore(
+  participantsPath: string,
+): Map<string, Participant> {
+  const participants = new Map<string, Participant>();
+  const participantsEntries = Deno.readDirSync(participantsPath);
+
+  for (const participantEntry of participantsEntries) {
+    if (
+      participantEntry.isFile && participantEntry.name.endsWith(".yml")
+    ) {
+      const ID = participantEntry.name.replace(/\.yml$/, "");
+
+      const readParticipant = (yamlParse(
+        Deno.readTextFileSync(
+          path.join(participantsPath, participantEntry.name),
+        ),
+      ) || {}) as Participant;
+
+      if (readParticipant.id && readParticipant.id !== ID) {
+        console.warn("ID of participant doesn't match file name");
+      }
+
+      readParticipant.id = ID;
+
+      participants.set(ID, readParticipant);
+    } else {
+      console.warn("Participants should be stored as yml files");
+    }
+  }
+
+  return participants;
+}
+
+function queryByFlatLabels(
+  state: State,
+  participants: string[],
+  query: string[],
+) {
+  const result: Record<string, unknown> = {};
+  const branch = state.present;
+  state.participants;
+  query.forEach((q) => {
+    if (branch.data[q] !== undefined) {
+      result[q] = branch.data[q];
+    }
+  });
+  return result;
 }
 
 // type LabelStatus = 'started' | 'changed' | 'ended';
@@ -125,41 +222,12 @@ function runWeb(state: State) {
 //   return path.join("/");
 // }
 
-// ████████╗██╗   ██╗██████╗ ███████╗███████╗
-// ╚══██╔══╝╚██╗ ██╔╝██╔══██╗██╔════╝██╔════╝
-//    ██║    ╚████╔╝ ██████╔╝█████╗  ███████╗
-//    ██║     ╚██╔╝  ██╔═══╝ ██╔══╝  ╚════██║
-//    ██║      ██║   ██║     ███████╗███████║
-//    ╚═╝      ╚═╝   ╚═╝     ╚══════╝╚══════╝
-
 // type SubscriptionCallback = (
 //   value: Map<BranchID, any>,
 //   changes: Map<BranchID, any>
 // ) => void;
 
 // type AvatarName = string;
-
-type State = {
-  // Center
-  origin: string;
-  location: string;
-  present: Branch;
-
-  // Server
-  host: string;
-  port: number;
-
-//   // Known & Loaded Information
-//   memory: Map<string, Branch | Fruit | Portal>;
-//   labels: Map<string, Fruit[]>;
-//   labelsActions: Map<string, LabelAction>;
-
-//   // Players Identity
-//   avatars: Map<AvatarName, Fruit>;
-//   sessions: Map<Token, AvatarName>;
-//   avatarKeys: Map<AvatarName, PublicKey>;
-//   keysRenewAt: Map<PublicKey, number>;
-};
 
 // function onFruitChange(state: State, fruit: Fruit) {
 //   // const branch = state.memory.get(fruit.past.location)!;
