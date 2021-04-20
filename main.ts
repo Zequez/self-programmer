@@ -4,6 +4,7 @@ import * as Colors from "https://deno.land/std/fmt/colors.ts";
 import { parse as yamlParse } from "https://deno.land/std/encoding/yaml.ts";
 import { Participant } from "./apps/identity/Participant.ts";
 import { pick } from "./libraries/utils.ts";
+import NavigatorAppDriver from "./NavigatorAppDriver.ts";
 
 // import { PublicKey, PrivateKey, Token } from "./model/Identity.ts";
 import {
@@ -12,6 +13,7 @@ import {
   explore,
   Fruit,
   isBranch,
+  isFruit,
   manifestBranch,
   Portal,
 } from "./model/Branch.ts";
@@ -36,6 +38,8 @@ import server from "./libraries/server.ts";
 //    ╚═╝      ╚═╝   ╚═╝     ╚══════╝╚══════╝
 
 type State = {
+  rootApp: string;
+
   // Center
   origin: string;
   location: string;
@@ -48,6 +52,8 @@ type State = {
   // Server
   host: string;
   port: number;
+
+  appsDrivers: Record<string, NavigatorAppDriver>;
   //   // Known & Loaded Information
   //   memory: Map<string, Branch | Fruit | Portal>;
   //   labels: Map<string, Fruit[]>;
@@ -69,17 +75,65 @@ type State = {
 
 commander(init);
 
+// type App = {
+//   location: string;
+//   buildCommand: null | string;
+//   watchCommand: null | string;
+//   watchingProcessId: null | number;
+//   checkUpdate: () => Promise<boolean>;
+//   update: () => Promise<boolean>;
+//   fetchFile: (path: string) => Promise<string>;
+// };
+
+// onExit(() => {
+//   if (navigatorAppWatcher) {
+//     navigatorAppWatcher.close();
+//   }
+// });
+
+// class AppDriver {
+//   // entrypoint: 'index.html',
+//   // watch: '',
+//   // build: '',
+//   async function get (path: string) {
+
+//   }
+
+//   async function set(path: string, data: string) {
+
+//   }
+// }
+
+// async function getAppFile(app: App) {
+//   app.location
+// }
+
+// const availableApps = {
+//   navigator:
+// }
+
 function init(params: Flags): void {
   const tree = explore(params.root);
 
-  const state = {
+  const origin = path.dirname(path.fromFileUrl(import.meta.url));
+
+  const state: State = {
+    rootApp: "navigator",
+
     // flags,
-    origin: path.dirname(path.fromFileUrl(import.meta.url)),
+    origin,
     location: params.root,
     present: tree,
 
     apps: new Map(),
     participants: new Map(),
+
+    appsDrivers: {
+      navigator: new NavigatorAppDriver(
+        "navigator",
+        path.join(origin, "apps", "navigator"),
+      ),
+    },
 
     // Server
     host: params.address,
@@ -96,48 +150,92 @@ function init(params: Flags): void {
     // keysRenewAt: Map<PublicKey, number>;
   };
 
-  const appsBranch = state.present.pathways.apps as Branch;
-  Object.keys(appsBranch.pathways).forEach((appName) => {
-    const appBranch = appsBranch.pathways[appName];
-    if (isBranch(appBranch) && isBranch(appBranch.pathways.participants)) {
-      console.log(
-        Colors.green("Loading with agent driver"),
-        appBranch.location,
-      );
-      const participantsBranch = appBranch.pathways.participants;
-      awakenBranch(participantsBranch);
-      for (const key in participantsBranch.data) {
-        const existing = state.participants.get(key) || {};
-        const current = participantsBranch.data[key] as Participant;
-        state.participants.set(key, { ...existing, ...current });
-      }
-    } else {
-      console.warn(
-        Colors.yellow("Couldn't find app driver"),
-        appBranch.location,
-      );
-    }
-  });
+  // Load apps
+  // const appsBranch = state.present.pathways.apps as Branch;
+  // Object.keys(appsBranch.pathways).forEach((appName) => {
+  //   const appBranch = appsBranch.pathways[appName];
+  //   if (isBranch(appBranch) && isBranch(appBranch.pathways.participants)) {
+  //     console.log(
+  //       Colors.green("Loading with agent driver"),
+  //       appBranch.location,
+  //     );
+  //     const participantsBranch = appBranch.pathways.participants;
+  //     awakenBranch(participantsBranch);
+  //     for (const key in participantsBranch.data) {
+  //       const existing = state.participants.get(key) || {};
+  //       const current = participantsBranch.data[key] as Participant;
+  //       state.participants.set(key, { ...existing, ...current });
+  //     }
+  //     state.apps.set(appBranch.name, appBranch);
+  //   } else {
+  //     console.warn(
+  //       Colors.yellow("Couldn't find app driver"),
+  //       appBranch.location,
+  //     );
+  //   }
+  // });
 
-  console.log(
-    "Participants: ",
-    JSON.stringify(Object.fromEntries(state.participants), null, 2),
-  );
+  // console.log(
+  //   "Participants: ",
+  //   JSON.stringify(Object.fromEntries(state.participants), null, 2),
+  // );
 
   console.log("Running server");
 
+  // function branchWalkToPath();
+
   server(state.location, state.host, state.port, {
-    onRequestApp: (app: string) => {
-      return Promise.resolve("<html><body>Hello there</body></html>");
+    onRequestApp: (appId: string | null, appPath: string | null) => {
+      if (appId === null || appId === "/") appId = "navigator";
+      if (appPath === null || appPath === "/") appPath = "index.html";
+
+      const appLocation = path.join(state.origin, "apps", appId);
+
+      const appDriver = state.appsDrivers[appId];
+
+      if (appDriver) {
+        return appDriver.fetch(appPath);
+      } else {
+        return Promise.resolve(
+          "<html><body>Could not find app with that name</body></html>",
+        );
+      }
+
+      // (state.present.pathways.apps as Branch).pathways;
+      // if (appLocation === '/') {
+      //   // let appId = state.rootApp;
+      // } else if ()
+      // const appLocation = state.apps.get(
+      //   appReq === "/" ? state.rootApp : appReq.replace(/^\//, ""),
+      // );
+      // const appFile = app
+      // console.log(app);
+
+      // if (app) {
+      //   // Does the app needs to bundle?
+      //   // Is it already bundled?
+      //   // What is the entrypoint for the browser?
+      //   // What is the perspective of the app we are using?
+
+      //   const index = app.pathways["index.html"];
+      //   if (index && isFruit(index)) {
+      //     const html = Deno.readTextFileSync(index.location);
+      //     return Promise.resolve(html);
+      //   }
+      // }
+      return Promise.resolve(
+        "<html><body>Could not find app with that name</body></html>",
+      );
     },
     onRequestInfo: (query: string[]) => {
+      const keys = <(keyof Participant)[]> query;
+      const result: typeof state.participants = new Map();
+      state.participants.forEach((participant, id) => {
+        result.set(id, pick(participant, keys) as Participant);
+      });
+
       return Promise.resolve(
-        JSON.stringify([{
-          id: "zequez",
-          name: "Ezequiel",
-          avatarUrl:
-            "https://robohash.org/d13a61ea10fb3d5e926676e0c64cafbb?set=set4&bgset=&size=400x400",
-        }]),
+        JSON.stringify(Object.fromEntries(result), null, 2),
       );
     },
     onRequestRelease: (info: unknown) => {
