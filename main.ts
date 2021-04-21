@@ -76,18 +76,24 @@ type State = {
 // ╚═╝╚═╝  ╚═══╝╚═╝   ╚═╝
 
 type ParentMsg = { msg: "Flags"; payload: Flags } | { msg: "Shutdown" };
+type ChildMsg = { msg: "ReadyToShutdown" };
 
-// declare global {
-//   onmessage:
-//   () => void ;
-// }
+declare global {
+  interface Window {
+    onmessage: (ev: MessageEvent) => void;
+    postMessage: (ev: ChildMsg) => void;
+  }
+}
 
-self.onmessage = async (ev) => {
+self.onmessage = ({ data }: MessageEvent<ParentMsg>) => {
   // console.log("RECEIVED MESSAGE!", ev);
-  const msg = ev.data as ParentMsg;
-  if (msg.msg === "Flags") {
-    init(msg.payload);
-  } else if (msg.msg === "Shutdown") {
+  if (data.msg === "Flags") {
+    init(data.payload);
+  } else if (data.msg === "Shutdown") {
+    console.log("Shutting down...");
+    setTimeout(() => {
+      self.postMessage({ msg: "ReadyToShutdown" });
+    }, 500);
   }
 };
 
@@ -195,8 +201,6 @@ function init(params: Flags): void {
   //   "Participants: ",
   //   JSON.stringify(Object.fromEntries(state.participants), null, 2),
   // );
-
-  console.log("Running server");
 
   // function branchWalkToPath();
 

@@ -1,6 +1,8 @@
 import { dirname, fromFileUrl } from "https://deno.land/std/path/mod.ts";
 import command, { Flags } from "./libraries/command.ts";
+import * as Colors from "https://deno.land/std/fmt/colors.ts";
 
+const WAIT_FOR_SHUTDOWN = 1000;
 const DEBOUNCE = 200;
 const __dirname = dirname(fromFileUrl(import.meta.url));
 const matchers: RegExp[] = [/^(?!\/apps\/).*\.(ts|tsx|json)$/];
@@ -25,21 +27,52 @@ const accumulatingDebouncer = <T>(ms: number) => {
 
 const debounced = accumulatingDebouncer<string>(DEBOUNCE);
 
+const log = (...msg: unknown[]) =>
+  console.log(Colors.blue("[watcher]"), ...msg);
+
 command(async (flags) => {
-  let main = createWorker(flags);
+  let main: Worker;
+  let shuttingDown = false;
+
+  function recreateWorker() {
+    main = createWorker(flags);
+    shuttingDown = false;
+  }
+
+  recreateWorker();
 
   for await (const event of watcher) {
     const paths = event.paths.map((p) => p.replace(__dirname, ""));
 
     debounced(paths, (changedPaths) => {
-      const changedFiles = changedPaths.filter((file) =>
-        matchers.find((regex) => file.match(regex))
-      );
-      if (changedFiles.length) {
-        console.log("[watcher]", changedFiles);
-        main.terminate();
-        main = createWorker(flags);
-        // main.postMessage({ msg: "FileChange", payload: changedFiles });
+      if (!shuttingDown) {
+        const changedFiles = changedPaths.filter((file) =>
+          matchers.find((regex) => file.match(regex))
+        );
+        if (changedFiles.length) {
+          log(changedFiles);
+          main.postMessage({ msg: "FileChange", payload: changedFiles });
+
+          shuttingDown = true;
+          log("Restarting main worker...");
+          log("Sending shutdown signal, waiting 1 second");
+
+          main.postMessage({ msg: "Shutdown" });
+          const shutdownTimer = setTimeout(() => {
+            console.log("Timer elapsed, no signal, forcing a shutdown");
+            main.terminate();
+            recreateWorker();
+          }, WAIT_FOR_SHUTDOWN);
+
+          main.addEventListener("message", ({ data }) => {
+            if (data.msg === "ReadyToShutdown") {
+              clearTimeout(shutdownTimer);
+              console.log("Received signal that worker is ready to shutdown");
+              main.terminate();
+              recreateWorker();
+            }
+          });
+        }
       }
     });
   }

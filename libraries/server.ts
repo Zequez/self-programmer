@@ -37,7 +37,6 @@ export default async function server(
   port: number,
   cb: ServerCallbacks,
 ) {
-  console.log("Starting self-programmer web server");
   const s = pogo.server({ port, hostname: address });
   console.log("Server started at: ", "http://localhost:8000/");
 
