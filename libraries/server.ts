@@ -1,4 +1,8 @@
 import { serve, ServerRequest } from "https://deno.land/std/http/server.ts";
+import {
+  WebSocketClient,
+  WebSocketServer,
+} from "https://deno.land/x/websocket@v0.1.1/mod.ts";
 import pogo from "https://deno.land/x/pogo/main.ts";
 // import { lookup } from "https://deno.land/x/media_types/mod.ts";
 import { urlParse } from "https://deno.land/x/url_parse/mod.ts";
@@ -10,6 +14,7 @@ type ServerCallbacks = {
   ) => Promise<string>;
   onRequestInfo: (query: string[]) => Promise<string>;
   onRequestRelease: (info: unknown) => Promise<string>;
+  onClientConnects: (wsc: WebSocketClient) => void;
   // onRequestFork: (app: string, newAppName: string) => Promise<string>;
   // onRequestSignals?: () => string;
   // onRequestBranches?: () => string;
@@ -41,8 +46,20 @@ export default async function server(
   s.router.get("/", async (r) => {
     // console.log(r);
     const url = urlParse(r.href);
+    console.log(url);
+    const [appId, _] = url.hostname.split(".");
+
     const params = new URLSearchParams(url.search);
+
     return await cb.onRequestApp(params.get("app"), params.get("path"));
+  });
+
+  const wss = new WebSocketServer(8090);
+  wss.on("connection", (wsc: WebSocketClient) => {
+    cb.onClientConnects(wsc);
+    // wsc.on("message", () => {
+    //   wsc.send('reload')
+    // })
   });
 
   await s.start();

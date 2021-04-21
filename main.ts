@@ -5,6 +5,8 @@ import { parse as yamlParse } from "https://deno.land/std/encoding/yaml.ts";
 import { Participant } from "./apps/identity/Participant.ts";
 import { pick } from "./libraries/utils.ts";
 import NavigatorAppDriver from "./NavigatorAppDriver.ts";
+import { WebSocketClient } from "https://deno.land/x/websocket@v0.1.1/mod.ts";
+// import watch from "https://deno.land/x/watch@1.1.0/mod.ts";
 
 // import { PublicKey, PrivateKey, Token } from "./model/Identity.ts";
 import {
@@ -18,7 +20,7 @@ import {
   Portal,
 } from "./model/Branch.ts";
 // import { Sign } from "./model/Signal.ts";
-import commander, { Flags } from "./libraries/command.ts";
+import { Flags } from "./libraries/command.ts";
 // import { identity } from "./utils.ts";
 import server from "./libraries/server.ts";
 
@@ -73,7 +75,21 @@ type State = {
 // ██║██║ ╚████║██║   ██║
 // ╚═╝╚═╝  ╚═══╝╚═╝   ╚═╝
 
-commander(init);
+type ParentMsg = { msg: "Flags"; payload: Flags } | { msg: "Shutdown" };
+
+// declare global {
+//   onmessage:
+//   () => void ;
+// }
+
+self.onmessage = async (ev) => {
+  // console.log("RECEIVED MESSAGE!", ev);
+  const msg = ev.data as ParentMsg;
+  if (msg.msg === "Flags") {
+    init(msg.payload);
+  } else if (msg.msg === "Shutdown") {
+  }
+};
 
 // type App = {
 //   location: string;
@@ -186,10 +202,14 @@ function init(params: Flags): void {
 
   server(state.location, state.host, state.port, {
     onRequestApp: (appId: string | null, appPath: string | null) => {
+      console.log("App ID:", appId);
+      console.log("App Path:", appPath);
       if (appId === null || appId === "/") appId = "navigator";
       if (appPath === null || appPath === "/") appPath = "index.html";
 
       const appLocation = path.join(state.origin, "apps", appId);
+
+      console.log(appId, appPath);
 
       const appDriver = state.appsDrivers[appId];
 
@@ -223,9 +243,12 @@ function init(params: Flags): void {
       //     return Promise.resolve(html);
       //   }
       // }
-      return Promise.resolve(
-        "<html><body>Could not find app with that name</body></html>",
-      );
+      // return Promise.resolve(
+      //   "<html><body>Could not find app with that name</body></html>",
+      // );
+    },
+    onClientConnects: (wsc: WebSocketClient) => {
+      console.log("Web socket client connected");
     },
     onRequestInfo: (query: string[]) => {
       const keys = <(keyof Participant)[]> query;
